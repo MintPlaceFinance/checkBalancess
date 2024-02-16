@@ -10,31 +10,30 @@ async function checkBalance(wallet) {
 }
 
 async function generateAndCheckWallets(numberOfWallets) {
-    let found = false; // Flag to indicate if a balance has been found
+    let walletsChecked = 0;
+    let walletsWithBalance = 0;
 
-    while (!found) {
+    while (true) { // Loop indefinitely until a balance is found
         const checks = [];
         for (let i = 0; i < numberOfWallets; i++) {
             const mnemonic = bip39.generateMnemonic();
             const wallet = ethers.Wallet.fromMnemonic(mnemonic);
-            checks.push(checkBalance(wallet).then(({ balance, wallet }) => {
-                if (balance.gt(ethers.constants.Zero)) {
-                    console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${wallet.mnemonic}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
-                    found = true; // Set found to true to break the loop
-                }
-            }));
+            checks.push(checkBalance(wallet));
         }
 
-        await Promise.all(checks).then(() => {
-            if (!found) {
-                console.log('Finished checking a batch of wallets with no balance found. Starting another batch...');
+        // Await all checks and analyze results
+        const results = await Promise.all(checks);
+        results.forEach(({ balance, wallet }) => {
+            walletsChecked++;
+            if (balance.gt(ethers.constants.Zero)) {
+                walletsWithBalance++;
+                console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${wallet.mnemonic.phrase}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
+                process.exit(0); // Exit if balance found
             }
         });
 
-        if (found) {
-            console.log('Exiting process after finding a wallet with balance.');
-            process.exit(0); // Exit if balance found
-        }
+        console.log(`Batch completed. Wallets checked: ${walletsChecked}, Wallets with balance: ${walletsWithBalance}, Wallets without balance: ${walletsChecked - walletsWithBalance}`);
+        console.log('Starting another batch...');
     }
 }
 
