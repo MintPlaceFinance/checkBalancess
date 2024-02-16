@@ -1,23 +1,23 @@
-const { fork } = require("child_process");
-const { program } = require('commander');
+const { ethers } = require("ethers");
+const bip39 = require('bip39');
 
-program.option("-c, --count <number>", "number of processes");
-var options = program.parse().opts();
-const count = parseInt(options.count) || 100; // Default to 1 if not specified
+// Configure your Ethereum provider
+const provider = new ethers.providers.JsonRpcProvider("https://eth-mainnet.alchemyapi.io/v2/YourAlchemyAPIKey");
 
-console.log(`Starting ${count} process(es).`);
+async function checkWalletBalance() {
+    // Generate a new mnemonic
+    const mnemonic = bip39.generateMnemonic();
+    // Create a wallet using the generated mnemonic
+    const wallet = ethers.Wallet.fromMnemonic(mnemonic);
+    // Use the wallet address to check for balance
+    const balance = await provider.getBalance(wallet.address);
 
-for (let i = 0; i < count; i++) {
-    const child = fork("worker.js");
-
-    child.on("message", (msg) => {
-        if (msg.found) {
-            console.log(`Balance found by worker: ${msg}`);
-            process.exit(0); // Exit main process if any child reports finding a balance
-        }
-    });
-
-    child.on("exit", (code) => {
-        console.log(`Child process exited with code ${code}`);
-    });
+    // Log the result
+    if (balance.gt(ethers.constants.Zero)) {
+        console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${mnemonic}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
+    } else {
+        console.log(`No balance found. Address: ${wallet.address}, Mnemonic: ${mnemonic}`);
+    }
 }
+
+checkWalletBalance();
