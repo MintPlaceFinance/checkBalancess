@@ -36,6 +36,7 @@
     "electrum-client": "^0.0.6",
     "ethers": "~5.6.9",
     "log-update": "~5.0.1",
-    "p-limit": "^5.0.0"
+    "p-limit": "^5.0.0",
+    "p-queue": "^8.0.1"
   }
 }

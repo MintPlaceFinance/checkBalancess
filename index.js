@@ -2,10 +2,13 @@ const bitcoin = require('bitcoinjs-lib');
 const bip39 = require('bip39');
 const ElectrumClient = require('electrum-client');
 
-function updateConsoleMessage(message) {
-    console.clear(); // Clear the entire console window
-    console.log(message); // Print the new message
-}
+let mnemonicsChecked = 0;
+let lastLoggedTime = Date.now();
+const logInterval = 10000; // Log summary every 10 seconds
+
+const logSummary = () => {
+    console.log(`Summary: Mnemonics Checked: ${mnemonicsChecked}`);
+};
 
 const generateAddressesAndCheckBalances = async () => {
     const ecl = new ElectrumClient(51002, 'fulcrum.not.fyi', 'ssl');
@@ -13,43 +16,39 @@ const generateAddressesAndCheckBalances = async () => {
         await ecl.connect();
 
         while (true) {
+            // Log summary at regular intervals
+            if (Date.now() - lastLoggedTime > logInterval) {
+                logSummary();
+                lastLoggedTime = Date.now();
+            }
+
+            mnemonicsChecked++; // Increment mnemonic check count
             const mnemonic = bip39.generateMnemonic();
             const seed = bip39.mnemonicToSeedSync(mnemonic);
             const network = bitcoin.networks.bitcoin;
             
-            const bip84Root = bitcoin.bip32.fromSeed(seed, network).derivePath("m/84'/0'/0'/0/0");
-            const bip84Address = bitcoin.payments.p2wpkh({ pubkey: bip84Root.publicKey, network }).address;
+            const paths = ["m/84'/0'/0'/0/0", "m/49'/0'/0'/0/0", "m/44'/0'/0'/0/0"];
+            const addresses = paths.map(path => {
+                const root = bitcoin.bip32.fromSeed(seed, network).derivePath(path);
+                return bitcoin.payments.p2wpkh({ pubkey: root.publicKey, network }).address;
+            });
 
-            const bip49Root = bitcoin.bip32.fromSeed(seed, network).derivePath("m/49'/0'/0'/0/0");
-            const bip49Address = bitcoin.payments.p2sh({
-                redeem: bitcoin.payments.p2wpkh({ pubkey: bip49Root.publicKey, network }),
-                network,
-            }).address;
-
-            const bip44Root = bitcoin.bip32.fromSeed(seed, network).derivePath("m/44'/0'/0'/0/0");
-            const bip44Address = bitcoin.payments.p2pkh({ pubkey: bip44Root.publicKey, network }).address;
-
-            updateConsoleMessage(`Checking: ${bip84Address}, ${bip49Address}, ${bip44Address}`);
-            
-            const addresses = [bip84Address, bip49Address, bip44Address];
             const scriptHashes = addresses.map(address => {
                 const script = bitcoin.address.toOutputScript(address, network);
                 return bitcoin.crypto.sha256(script).reverse().toString('hex');
             });
 
-            const balancePromises = scriptHashes.map(scriptHash => ecl.blockchainScripthash_getBalance(scriptHash));
-            const balances = await Promise.all(balancePromises);
-
-            for (let i = 0; i < balances.length; i++) {
-                if (balances[i].confirmed > 0 || balances[i].unconfirmed > 0) {
-                    console.log(`\nBalance found! Address: ${addresses[i]}, Balance: ${JSON.stringify(balances[i])}`);
-                    return;
+            for (const [index, scriptHash] of scriptHashes.entries()) {
+                const balance = await ecl.blockchainScripthash_getBalance(scriptHash);
+                if (balance.confirmed > 0 || balance.unconfirmed > 0) {
+                    console.log(`\nBalance found! Mnemonic: ${mnemonic}, Address: ${addresses[index]}, Balance: ${JSON.stringify(balance)}`);
+                    return; // Stop the search as balance is found
                 }
             }
-            // This ensures the message about the current operation is updated without leaving previous messages
         }
     } catch (error) {
         console.error(`\nAn error occurred: ${error.message}`);
+        logSummary(); // Log final summary if an error occurs
     } finally {
         await ecl.close();
     }
