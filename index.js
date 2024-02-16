@@ -2,7 +2,7 @@ const { ethers } = require("ethers");
 const bip39 = require('bip39');
 
 // Configure your Ethereum provider
-const provider = new ethers.providers.JsonRpcProvider("https://eth-mainnet.alchemyapi.io/v2/YourAlchemyAPIKey");
+const provider = new ethers.providers.JsonRpcProvider("https://eth-mainnet.g.alchemy.com/v2/GhdsgZPon6ORoVqTh8yD0j1FgtRX1v0R");
 
 async function checkWalletBalance() {
     // Generate a new mnemonic
