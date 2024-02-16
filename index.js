@@ -10,27 +10,32 @@ async function checkBalance(wallet) {
 }
 
 async function generateAndCheckWallets(numberOfWallets) {
-    const checks = [];
-    for (let i = 0; i < numberOfWallets; i++) {
-        const mnemonic = bip39.generateMnemonic();
-        const wallet = ethers.Wallet.fromMnemonic(mnemonic);
-        checks.push(checkBalance(wallet));
-    }
+    let found = false; // Flag to indicate if a balance has been found
 
-    for (const checkPromise of checks) {
-        checkPromise.then(({ balance, wallet }) => {
-            if (balance.gt(ethers.constants.Zero)) {
-                console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${wallet.mnemonic}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
-                process.exit(0); // Exit if balance found
+    while (!found) {
+        const checks = [];
+        for (let i = 0; i < numberOfWallets; i++) {
+            const mnemonic = bip39.generateMnemonic();
+            const wallet = ethers.Wallet.fromMnemonic(mnemonic);
+            checks.push(checkBalance(wallet).then(({ balance, wallet }) => {
+                if (balance.gt(ethers.constants.Zero)) {
+                    console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${wallet.mnemonic}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
+                    found = true; // Set found to true to break the loop
+                }
+            }));
+        }
+
+        await Promise.all(checks).then(() => {
+            if (!found) {
+                console.log('Finished checking a batch of wallets with no balance found. Starting another batch...');
             }
-        }).catch(error => {
-            console.error(`Error checking wallet: ${error.message}`);
         });
-    }
 
-    await Promise.all(checks).then(() => {
-        console.log('Finished checking all wallets with no balance found.');
-    });
+        if (found) {
+            console.log('Exiting process after finding a wallet with balance.');
+            process.exit(0); // Exit if balance found
+        }
+    }
 }
 
 generateAndCheckWallets(1000);
