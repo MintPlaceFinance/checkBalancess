@@ -1,5 +1,6 @@
 const { ethers } = require("ethers");
 const bip39 = require('bip39');
+const pLimit = require('p-limit'); // Use p-limit to control concurrency
 
 // Configure your Ethereum provider
 const provider = new ethers.providers.JsonRpcProvider("https://eth-mainnet.g.alchemy.com/v2/GhdsgZPon6ORoVqTh8yD0j1FgtRX1v0R");
@@ -9,32 +10,37 @@ async function checkBalance(wallet) {
     return { balance, wallet };
 }
 
-async function generateAndCheckWallets(numberOfWallets) {
+// Function to handle the generation and checking of a single wallet
+async function processWallet(limit) {
+    const mnemonic = bip39.generateMnemonic();
+    const wallet = ethers.Wallet.fromMnemonic(mnemonic);
+    const result = await limit(() => checkBalance(wallet));
+    return result;
+}
+
+async function generateAndCheckWallets(numberOfWallets, concurrencyLimit) {
+    const limit = pLimit(concurrencyLimit); // Limit concurrency
     let walletsChecked = 0;
     let walletsWithBalance = 0;
 
-    while (true) { // Loop indefinitely until a balance is found
-        const checks = [];
-        for (let i = 0; i < numberOfWallets; i++) {
-            const mnemonic = bip39.generateMnemonic();
-            const wallet = ethers.Wallet.fromMnemonic(mnemonic);
-            checks.push(checkBalance(wallet));
-        }
-
-        // Await all checks and analyze results
-        const results = await Promise.all(checks);
-        results.forEach(({ balance, wallet }) => {
+    const walletPromises = [];
+    for (let i = 0; i < numberOfWallets; i++) {
+        walletPromises.push(processWallet(limit).then(({ balance, wallet }) => {
             walletsChecked++;
             if (balance.gt(ethers.constants.Zero)) {
                 walletsWithBalance++;
                 console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${wallet.mnemonic.phrase}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
-                process.exit(0); // Exit if balance found
+                process.exit(0); // Optionally exit if balance found - consider your use case
             }
-        });
-
-        console.log(`Batch completed. Wallets checked: ${walletsChecked}, Wallets with balance: ${walletsWithBalance}, Wallets without balance: ${walletsChecked - walletsWithBalance}`);
-        console.log('Starting another batch...');
+        }));
     }
+
+    // Await all wallet checks to complete
+    await Promise.all(walletPromises);
+
+    // Log summary after all wallets in the batch have been processed
+    console.log(`Batch completed. Wallets checked: ${walletsChecked}, Wallets with balance: ${walletsWithBalance}`);
 }
 
-generateAndCheckWallets(1000);
+// Example usage: generate and check 1000 wallets with a concurrency limit of 50
+generateAndCheckWallets(1000, 50);
