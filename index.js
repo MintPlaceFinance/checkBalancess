@@ -1,12 +1,6 @@
-const { ethers } = require("ethers");
-const bip39 = require('bip39');
-const pLimit = require('p-limit'); // Use p-limit to control concurrency
-
-// Dynamically import p-limit to manage concurrency in a CommonJS module
-async function loadPLimit() {
-    const { default: pLimit } = await import('p-limit');
-    return pLimit;
-}
+import { ethers } from "ethers";
+import bip39 from 'bip39';
+import pLimit from 'p-limit'; // Use p-limit to control concurrency
 
 async function checkBalance(wallet, provider) {
     const balance = await provider.getBalance(wallet.address);
@@ -14,7 +8,6 @@ async function checkBalance(wallet, provider) {
 }
 
 async function generateAndCheckWallets(numberOfWallets, provider) {
-    const pLimit = await loadPLimit();
     const limit = pLimit(5); // Adjust the concurrency limit as needed
 
     let walletsChecked = 0;
@@ -24,9 +17,8 @@ async function generateAndCheckWallets(numberOfWallets, provider) {
         const checks = [];
         console.log(`Generating and checking ${numberOfWallets} wallets...`);
         for (let i = 0; i < numberOfWallets; i++) {
-            const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase; // Alternatively, use bip39 to generate mnemonics
+            const mnemonic = bip39.generateMnemonic(); // Use bip39 to generate mnemonics
             const wallet = ethers.Wallet.fromMnemonic(mnemonic);
-            // Push a limited asynchronous function to checks array
             checks.push(limit(() => checkBalance(wallet, provider)));
         }
 
@@ -35,8 +27,8 @@ async function generateAndCheckWallets(numberOfWallets, provider) {
             walletsChecked++;
             if (balance.gt(ethers.constants.Zero)) {
                 walletsWithBalance++;
-                console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${wallet.mnemonic}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
-                // Consider adding a process.exit(0) here if you want to stop as soon as a balance is found
+                console.log(`Found balance! Address: ${wallet.address}, Mnemonic: ${mnemonic}, Balance: ${ethers.utils.formatEther(balance)} ETH`);
+                process.exit(0); // Optionally exit if balance found
             }
         });
 
@@ -51,7 +43,6 @@ async function generateAndCheckWallets(numberOfWallets, provider) {
 }
 
 async function main() {
-    const { ethers } = await import('ethers');
     const provider = new ethers.providers.JsonRpcProvider("https://eth-mainnet.g.alchemy.com/v2/GhdsgZPon6ORoVqTh8yD0j1FgtRX1v0R");
     await generateAndCheckWallets(1000, provider);
 }
